@@ -109,11 +109,11 @@ Contributors also need permission to create and connect to VMs (for example `Com
 
    ```bash
    gcloud compute instances create tiff-vm-YOURNAME \
-  --zone=us-central1-a \
-  --machine-type=e2-standard-8 \
-  --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud \
-  --boot-disk-size=50GB \
-  --scopes=https://www.googleapis.com/auth/devstorage.read_write
+    --zone=us-central1-a \
+    --machine-type=e2-standard-8 \
+    --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud \
+    --boot-disk-size=50GB \
+    --scopes=https://www.googleapis.com/auth/devstorage.read_write
    ```
 
    If your code runs out of memory (MemoryError, or the process is "Killed"), resize the VM. Stop it first, since the machine type can't be changed while it is running:
@@ -121,7 +121,8 @@ Contributors also need permission to create and connect to VMs (for example `Com
     ```bash
     gcloud compute instances stop tiff-vm-YOURNAME --zone=us-central1-a
     gcloud compute instances set-machine-type tiff-vm-YOURNAME --zone=us-central1-a --machine-type=e2-highmem-16
-    gcloud compute instances start tiff-vm-YOURNAME --zone=us-central1-a```
+    gcloud compute instances start tiff-vm-YOURNAME --zone=us-central1-a
+    ```
 
 2. Set up SSH (Windows 10/11 already includes the OpenSSH client):
 
