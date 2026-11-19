@@ -1,0 +1,19 @@
+# Python environment and caches
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+
+# Data and large outputs (these live in the bucket)
+*.tif
+*.tiff
+*.mp4
+*.npz
+
+# Credentials (never commit these)
+*-key.json
+service-account*.json
+credentials.json
+
+# OS and editor files
+.DS_Store
+Thumbs.db

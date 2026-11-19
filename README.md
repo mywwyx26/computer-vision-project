@@ -66,27 +66,36 @@ Ask a project admin to grant your Google account the **Storage Object User** rol
 
 ## 3. Reading and writing files in code
 
-```python
-import rasterio
-from rasterio.windows import Window
+The files are OME-TIFF movies (many frames per file). Open them with gcsfs and pass the handle to tifffile, so only the frames you ask for are fetched:
 
-with rasterio.open("gs://cv-project-storage/[path]/[image.tif]") as src: # replace with actual tif path
-    tile = src.read(1, window=Window(0, 0, 1024, 1024))  # reads only this region
+```python
+import gcsfs, tifffile
+
+fs = gcsfs.GCSFileSystem()
+f = fs.open("your-bucket/path/_1_MMStack_Default.ome.tif", "rb")   # no gs:// prefix
+
+with tifffile.TiffFile(f) as tif:
+    n_frames = len(tif.pages)
+    first = tif.pages[0].asarray()                 # one frame
+
+frames = tifffile.imread(f, key=range(0, 2000))    # frames 0-1999 only
 ```
 
-Read windows or tiles rather than whole files whenever possible.
+Load only the frames you need, or loop over them one at a time, rather than loading a whole file into memory.
 
 To save results, write to a separate folder in the bucket (never over the original files):
 
 ```python
-# directly from code
-with rasterio.open("gs://cv-project-storage/outputs/result.tif", "w", **profile) as dst:
-    dst.write(data)
+import numpy as np
+
+with fs.open("your-bucket/outputs/features.npz", "wb") as out:
+    np.savez(out, feats=feats, iou=iou)
 ```
 
+For files that code writes locally (for example .mp4 clips), upload them with:
+
 ```bash
-# or upload an existing file
-gcloud storage cp result.tif gs://cv-project-storage/outputs/
+gcloud storage cp clip_500.mp4 gs://your-bucket/outputs/
 ```
 
 ## 4. Running on a VM (for heavy processing)

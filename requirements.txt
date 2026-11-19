@@ -1,0 +1,18 @@
+# Reading TIFFs (local or from Google Cloud Storage)
+tifffile>=2023.7.10
+imagecodecs>=2023.1.23    # needed if the TIFFs use compression
+gcsfs>=2023.6.0           # stream gs:// files without downloading
+
+# Image processing and analysis
+numpy>=1.24
+scipy>=1.10
+scikit-image>=0.21
+scikit-learn>=1.3
+
+# Plotting and video output
+matplotlib>=3.7
+imageio>=2.31
+imageio-ffmpeg>=0.4.9     # needed for writing .mp4 clips
+
+# Running the notebook
+ipykernel>=6.25
