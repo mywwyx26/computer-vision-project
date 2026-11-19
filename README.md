@@ -174,6 +174,53 @@ gcloud compute instances start tiff-vm-YOURNAME --zone=us-central1-a
 
 Delete it when you no longer need it: `gcloud compute instances delete tiff-vm-YOURNAME --zone=us-central1-a`
 
+## 5. Saving your work
+
+Anything only on the VM's disk is lost if the VM is deleted. Save each kind of output in the right place:
+
+| What | Where it goes |
+|---|---|
+| Code and notebook changes | GitHub |
+| Results (`.npz`, `.npy`, `.mp4`) | The bucket's `outputs/` folder |
+| Original TIFFs | Already in the bucket, never changed |
+
+### Code changes (GitHub)
+
+Run these in the VM terminal. The first two lines are needed only once per VM:
+
+```bash
+git config --global user.name "Your Name"
+git config --global user.email "you@example.com"
+git add trackfly_85128e.ipynb
+git commit -m "describe what you changed"
+git push
+```
+
+If `git push` asks for a password, use VS Code's **Source Control** panel (it can sign in with your GitHub account), or run `sudo apt install gh` and then `gh auth login`.
+
+Run `git status` before committing to check what is about to be added. `data/`, `*.mp4` and `*.npz` must be in `.gitignore`.
+
+### Notebook outputs (plots)
+
+Plots saved inside the `.ipynb` make the file large and cause merge conflicts when two people edit it. To commit only the code, run this once in each clone of the repo (including on each VM):
+
+```bash
+pip install nbstripout
+nbstripout --install
+```
+
+Your notebook still shows its outputs while you work. To keep a plot on purpose, save a small image (for example `plt.savefig("results/movement.png", dpi=150)`) and commit that file. Do not commit videos or data arrays.
+
+### Result files (bucket)
+
+```bash
+gcloud storage cp features.npz slot_mask.npy clip_500.mp4 gs://cv-project-storage/outputs/
+```
+
+### Before deleting a VM
+
+Make sure `git status` shows nothing uncommitted and that any results you want are uploaded to `outputs/`. The VM's disk is destroyed when the VM is deleted. Stopping a VM keeps its disk.
+
 ## Troubleshooting
 
 | Problem | Fix |
