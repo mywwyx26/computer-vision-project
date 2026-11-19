@@ -26,6 +26,8 @@ https://console.cloud.google.com/storage/browser?organizationId=0&project=cv-pro
 20250711_Fly1_2_MMStack_Default.ome.tif  
 20250711_Fly2_1_MMStack_Default.ome.tif  
 20250711_Fly2_2_MMStack_Default.ome.tif  
+  
+The files titled _0.ome.tif, _1.ome.tif, _2.ome.tif, etc. are one continuous video split into three parts.
 
 # Accessing the TIFF data
 
