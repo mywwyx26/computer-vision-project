@@ -31,7 +31,7 @@ The files titled _0.ome.tif, _1.ome.tif, _2.ome.tif, etc. are one continuous vid
 
 # Accessing the TIFF data
 
-The large TIFF files (~4 GB each) live in a Google Cloud Storage bucket. **Do not download them.** The code reads them directly from the bucket.
+The large TIFF files (~4 GB each) live in a Google Cloud Storage bucket. **Do not download them to your own computer.** Run the code on a VM (section 4), which copies one file at a time from the bucket.
 
 ## 1. Get access
 
@@ -66,36 +66,43 @@ Ask a project admin to grant your Google account the **Storage Object User** rol
 
 ## 3. Reading and writing files in code
 
-The files are OME-TIFF movies (many frames per file). Open them with gcsfs and pass the handle to tifffile, so only the frames you ask for are fetched:
+The files are OME-TIFF movies (many frames per file). Reading them straight from the bucket is very slow, because every frame needs its own network request. Instead, the notebook copies the file you need to local disk once, then reads it from there. This means it should be run on a VM (section 4), not on your own computer. To use a different file, change `filename` in the notebook's second cell.
 
 ```python
-import gcsfs, tifffile
+import os
+import gcsfs
+import tifffile
 
+filename = "20250511_1_MMStack_Default_0.ome.tif"   # the only place to change
+bucket_path = f"cv-project-storage/{filename}"      # no gs:// prefix
+local_path = f"data/{filename}"
 fs = gcsfs.GCSFileSystem()
-f = fs.open("your-bucket/path/_1_MMStack_Default.ome.tif", "rb")   # no gs:// prefix
 
-with tifffile.TiffFile(f) as tif:
+# copy once; skipped if the file is already on this machine
+if not os.path.exists(local_path):
+    os.makedirs("data", exist_ok=True)
+    fs.get(bucket_path, local_path + ".part")
+    os.replace(local_path + ".part", local_path)
+```
+
+Everything after that reads the local copy:
+
+```python
+path = local_path
+
+with tifffile.TiffFile(path) as tif:
     n_frames = len(tif.pages)
     first = tif.pages[0].asarray()                 # one frame
 
-frames = tifffile.imread(f, key=range(0, 2000))    # frames 0-1999 only
+frames = tifffile.imread(path, key=range(0, 2000))    # frames 0-1999 only
 ```
 
 Load only the frames you need, or loop over them one at a time, rather than loading a whole file into memory.
 
-To save results, write to a separate folder in the bucket (never over the original files):
-
-```python
-import numpy as np
-
-with fs.open("your-bucket/outputs/features.npz", "wb") as out:
-    np.savez(out, feats=feats, iou=iou)
-```
-
-For files that code writes locally (for example .mp4 clips), upload them with:
+The notebook saves its results (`features.npz`, `slot_mask.npy` and `clip_500.mp4`) on local disk. To keep them, upload them to the `outputs/` folder in the bucket (never over the original files):
 
 ```bash
-gcloud storage cp clip_500.mp4 gs://your-bucket/outputs/
+gcloud storage cp features.npz slot_mask.npy clip_500.mp4 gs://cv-project-storage/outputs/
 ```
 
 ## 4. Running on a VM (for heavy processing)
@@ -107,9 +114,7 @@ A VM in the same region as the bucket reads the files fast and with no download 
 Grant the VM's service account read and write access to the bucket.
 
 ```bash
-gcloud storage buckets add-iam-policy-binding gs://cv-project-storage \
-  --member="serviceAccount:96723376457-compute@developer.gserviceaccount.com" \
-  --role="roles/storage.objectUser"
+gcloud storage buckets add-iam-policy-binding gs://cv-project-storage --member="serviceAccount:96723376457-compute@developer.gserviceaccount.com" --role="roles/storage.objectUser"
 ```
 
 Contributors also need permission to create and connect to VMs (for example `Compute Instance Admin (v1)` and `Service Account User` on the project).
@@ -119,21 +124,16 @@ Contributors also need permission to create and connect to VMs (for example `Com
 1. Create your own VM. Use the same region as the bucket, and your name in the VM name:
 
    ```bash
-   gcloud compute instances create tiff-vm-YOURNAME \
-    --zone=us-central1-a \
-    --machine-type=e2-standard-8 \
-    --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud \
-    --boot-disk-size=50GB \
-    --scopes=https://www.googleapis.com/auth/devstorage.read_write
+   gcloud compute instances create tiff-vm-YOURNAME --zone=us-central1-a --machine-type=e2-standard-8 --image-family=ubuntu-2404-lts-amd64 --image-project=ubuntu-os-cloud --boot-disk-size=50GB --scopes=https://www.googleapis.com/auth/devstorage.read_write
    ```
 
    If your code runs out of memory (MemoryError, or the process is "Killed"), resize the VM. Stop it first, since the machine type can't be changed while it is running:
 
-    ```bash
-    gcloud compute instances stop tiff-vm-YOURNAME --zone=us-central1-a
-    gcloud compute instances set-machine-type tiff-vm-YOURNAME --zone=us-central1-a --machine-type=e2-highmem-16
-    gcloud compute instances start tiff-vm-YOURNAME --zone=us-central1-a
-    ```
+   ```bash
+   gcloud compute instances stop tiff-vm-YOURNAME --zone=us-central1-a
+   gcloud compute instances set-machine-type tiff-vm-YOURNAME --zone=us-central1-a --machine-type=e2-highmem-16
+   gcloud compute instances start tiff-vm-YOURNAME --zone=us-central1-a
+   ```
 
 2. Set up SSH (Windows 10/11 already includes the OpenSSH client):
 
@@ -155,7 +155,13 @@ Contributors also need permission to create and connect to VMs (for example `Com
 
    No login is needed on the VM. It authenticates to the bucket automatically.
 
-5. Open the `computer-vision-project` folder in VS Code and run your code as normal.
+5. Open the `computer-vision-project` folder in VS Code, open the notebook, choose the `.venv` interpreter when asked (or press `F1` and run **Python: Select Interpreter**), and run all cells.
+
+   The notebook copies the data file onto the VM's disk (about 4 GB per file). The 50 GB disk fits a few files, so delete the local copy when you finish with it:
+
+   ```bash
+   rm -r data/
+   ```
 
 ### Stop the VM when you're done
 
@@ -163,7 +169,7 @@ A running VM costs money. Stopping it keeps your files:
 
 ```bash
 gcloud compute instances stop tiff-vm-YOURNAME --zone=us-central1-a
-gcloud compute instances start tiff-vm-YOURNAME --zone=us-central1-a   # to resume
+gcloud compute instances start tiff-vm-YOURNAME --zone=us-central1-a
 ```
 
 Delete it when you no longer need it: `gcloud compute instances delete tiff-vm-YOURNAME --zone=us-central1-a`
@@ -177,4 +183,4 @@ Delete it when you no longer need it: `gcloud compute instances delete tiff-vm-Y
 | `403` on the VM | The VM's service account lacks bucket access, or the VM was created without the read/write storage scope. Ask an admin. |
 | `403` when writing from a VM created earlier | Stop the VM, run `gcloud compute instances set-service-account tiff-vm-YOURNAME --zone=us-central1-a --scopes=https://www.googleapis.com/auth/devstorage.read_write`, then start it again. |
 | VM not listed in Remote-SSH | Re-run `gcloud compute config-ssh`, and make sure the VM is running. |
-| Very slow reads | The file may not be a Cloud Optimized GeoTIFF. Ask an admin before converting. |
+| Very slow reads, or the notebook seems stuck | Don't read the file over the network. Copy it to local disk first (section 3). |
