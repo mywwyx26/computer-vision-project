@@ -99,10 +99,18 @@ frames = tifffile.imread(path, key=range(0, 2000))    # frames 0-1999 only
 
 Load only the frames you need, or loop over them one at a time, rather than loading a whole file into memory.
 
-The notebook saves its results (`features.npz`, `slot_mask.npy` and `clip_500.mp4`) on local disk. To keep them, upload them to the `outputs/` folder in the bucket (never over the original files):
+The slot mask and features are uploaded for you. The notebook saves them to the `outputs/` folder in the bucket as `<file>_slot_mask.npy` and `<file>_features.npz`, so each input file gets its own pair. `features.npz` holds the per-frame measurements, so you can rerun the movement cell without repeating the slow loop over every frame. To load it later:
+
+```python
+fs.get("cv-project-storage/outputs/20250511_1_MMStack_Default_0_features.npz", "features.npz")
+d = np.load("features.npz")
+feats, iou = d["feats"], d["iou"]
+```
+
+The video clip (`clip_500.mp4`) is a visual check and stays on the VM's local disk. To keep it, upload it to the `outputs/` folder in the bucket (never over the original files):
 
 ```bash
-gcloud storage cp features.npz slot_mask.npy clip_500.mp4 gs://cv-project-storage/outputs/
+gcloud storage cp clip_500.mp4 gs://cv-project-storage/outputs/
 ```
 
 ## 4. Running on a VM (for heavy processing)
@@ -181,7 +189,9 @@ Anything only on the VM's disk is lost if the VM is deleted. Save each kind of o
 | What | Where it goes |
 |---|---|
 | Code and notebook changes | GitHub |
-| Results from trackfly.ipynb (`.csv`, `.npz`, `.npy`, `.mp4`) | The bucket's `quiescent_bouts/` folder |
+| Quiescent bouts from trackfly.ipynb (`.csv`) and the check plot (`.svg`) | The bucket's `quiescent_bouts/` folder (uploaded by the notebook) |
+| Slot mask and features from trackfly.ipynb (`.npy`, `.npz`) | The bucket's `outputs/` folder (uploaded by the notebook) |
+| Video clips from trackfly.ipynb (`.mp4`) | The bucket's `outputs/` folder (upload by hand) |
 | Original TIFFs | Already in the bucket, never changed |
 
 ### Code changes (GitHub)
@@ -211,10 +221,10 @@ nbstripout --install
 
 Your notebook still shows its outputs while you work. To keep a plot on purpose, save a small image (for example `plt.savefig("results/movement.png", dpi=150)`) and commit that file. Do not commit videos or data arrays.
 
-### Result files (bucket)
+### Video clips (bucket)
 
 ```bash
-gcloud storage cp features.npz slot_mask.npy clip_500.mp4 gs://cv-project-storage/outputs/
+gcloud storage cp clip_500.mp4 gs://cv-project-storage/outputs/
 ```
 
 ### Before deleting a VM
