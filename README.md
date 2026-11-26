@@ -1,7 +1,7 @@
 # computer-vision-project
 Fly annotations and other resources
 
-# google cloud (where all the big files are stored)
+# Google cloud (where all the big files are stored)
 https://console.cloud.google.com/storage/browser?organizationId=0&project=cv-project-storage&prefix=&forceOnBucketsSortingFiltering=true&bucketType=live
 
 ### R22H05_Gal4_UAS_RSET_G8s_het
@@ -27,7 +27,7 @@ https://console.cloud.google.com/storage/browser?organizationId=0&project=cv-pro
 20250711_Fly2_1_MMStack_Default.ome.tif  
 20250711_Fly2_2_MMStack_Default.ome.tif  
   
-The files titled _0.ome.tif, _1.ome.tif, _2.ome.tif, etc. are one continuous video split into three parts.
+All inputs above are in the `inputs` folder. The files titled _0.ome.tif, _1.ome.tif, _2.ome.tif, etc. are one continuous video split into three parts. Resulting TIF files should go in separate folders, such as the `quiescent_bouts` folder for the output of trackfly.ipynb.
 
 # Accessing the TIFF data
 
@@ -181,7 +181,7 @@ Anything only on the VM's disk is lost if the VM is deleted. Save each kind of o
 | What | Where it goes |
 |---|---|
 | Code and notebook changes | GitHub |
-| Results (`.npz`, `.npy`, `.mp4`) | The bucket's `outputs/` folder |
+| Results from trackfly.ipynb (`.csv`, `.npz`, `.npy`, `.mp4`) | The bucket's `quiescent_bouts/` folder |
 | Original TIFFs | Already in the bucket, never changed |
 
 ### Code changes (GitHub)
@@ -191,7 +191,7 @@ Run these in the VM terminal. The first two lines are needed only once per VM:
 ```bash
 git config --global user.name "Your Name"
 git config --global user.email "you@example.com"
-git add trackfly_85128e.ipynb
+git add trackfly.ipynb
 git commit -m "describe what you changed"
 git push
 ```
