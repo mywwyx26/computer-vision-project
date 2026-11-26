@@ -75,12 +75,12 @@ import tifffile
 
 filename = "20250511_1_MMStack_Default_0.ome.tif"   # the only place to change
 bucket_path = f"cv-project-storage/{filename}"      # no gs:// prefix
-local_path = f"data/{filename}"
+local_path = f"temp/{filename}"
 fs = gcsfs.GCSFileSystem()
 
 # copy once; skipped if the file is already on this machine
 if not os.path.exists(local_path):
-    os.makedirs("data", exist_ok=True)
+    os.makedirs("temp", exist_ok=True)
     fs.get(bucket_path, local_path + ".part")
     os.replace(local_path + ".part", local_path)
 ```
@@ -165,10 +165,10 @@ Contributors also need permission to create and connect to VMs (for example `Com
 
 5. Open the `computer-vision-project` folder in VS Code, open the notebook, choose the `.venv` interpreter when asked (or press `F1` and run **Python: Select Interpreter**), and run all cells.
 
-   The notebook copies the data file onto the VM's disk (about 4 GB per file). The 50 GB disk fits a few files, so delete the local copy when you finish with it:
+   The notebook copies the data file onto the VM's disk (about 4 GB per file). The 50 GB disk fits a few files, so delete the temp folder when you finish with it:
 
    ```bash
-   rm -r data/
+   rm -r temp/
    ```
 
 ### Stop the VM when you're done
@@ -208,7 +208,7 @@ git push
 
 If `git push` asks for a password, use VS Code's **Source Control** panel (it can sign in with your GitHub account), or run `sudo apt install gh` and then `gh auth login`.
 
-Run `git status` before committing to check what is about to be added. `data/`, `*.mp4` and `*.npz` must be in `.gitignore`.
+Run `git status` before committing to check what is about to be added. `temp/`, `*.mp4` and `*.npz` must be in `.gitignore`.
 
 ### Notebook outputs (plots)
 
