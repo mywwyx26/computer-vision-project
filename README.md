@@ -66,7 +66,7 @@ Ask a project admin to grant your Google account the **Storage Object User** rol
 
 ## 3. Reading and writing files in code
 
-The files are OME-TIFF movies (many frames per file). Reading them straight from the bucket is very slow, because every frame needs its own network request. Instead, the notebook copies the file you need to local disk once, then reads it from there. This means it should be run on a VM (section 4), not on your own computer. To use a different file, change `filename` in the notebook's second cell.
+The files are OME-TIFF movies (many frames per file). Reading them straight from the bucket is very slow, because every frame needs its own network request. Instead, the notebook copies the file you need into a local `temp/` folder once, then reads it from there. This means it should be run on a VM (section 4), not on your own computer. To use a different file, change `filename` in the notebook's second cell. If the file is already in `temp/`, the copy is skipped.
 
 ```python
 import os
@@ -74,13 +74,14 @@ import gcsfs
 import tifffile
 
 filename = "20250511_1_MMStack_Default_0.ome.tif"   # the only place to change
-bucket_path = f"cv-project-storage/{filename}"      # no gs:// prefix
-local_path = f"temp/{filename}"
+temp_dir = "temp"                                      # everything made locally goes here
+bucket_path = f"cv-project-storage/inputs/{filename}"  # no gs:// prefix
+local_path = f"{temp_dir}/{filename}"
 fs = gcsfs.GCSFileSystem()
 
 # copy once; skipped if the file is already on this machine
 if not os.path.exists(local_path):
-    os.makedirs("temp", exist_ok=True)
+    os.makedirs(temp_dir, exist_ok=True)
     fs.get(bucket_path, local_path + ".part")
     os.replace(local_path + ".part", local_path)
 ```
@@ -94,23 +95,55 @@ with tifffile.TiffFile(path) as tif:
     n_frames = len(tif.pages)
     first = tif.pages[0].asarray()                 # one frame
 
-frames = tifffile.imread(path, key=range(0, 2000))    # frames 0-1999 only
+frame = tifffile.imread(path, key=100)              # one frame by number
+frames = tifffile.imread(path, key=range(0, 500))   # frames 0-499 only
 ```
 
-Load only the frames you need, or loop over them one at a time, rather than loading a whole file into memory.
+Load only the frames you need, or loop over them one at a time, rather than loading a whole file into memory. The notebook processes every frame this way, one at a time.
 
-The slot mask and features are uploaded for you. The notebook saves them to the `outputs/` folder in the bucket as `<file>_slot_mask.npy` and `<file>_features.npz`, so each input file gets its own pair. `features.npz` holds the per-frame measurements, so you can rerun the movement cell without repeating the slow loop over every frame. To load it later:
+The pixel sizes used for smoothing and for growing or closing masks were tuned on 688x512 frames. The notebook scales them automatically to each file's frame size.
+
+The copied data file is reused between runs, but every other output is overwritten on each run: each result replaces the file with the same name in the bucket.
+
+### Quiescent bouts
+
+The notebook saves the quiescent bouts as a small CSV instead of copying the frames out. Its cell after the movement check writes `<file>_quiescent_bouts.csv` (one row per bout: `file`, `bout`, `start_frame`, `end_frame`, `n_frames`) and uploads it to the `quiescent_bouts/` folder in the bucket, together with the check plot as `<file>_check_plot.svg`. Frame numbers count within that input file, and `end_frame` is not included.
+
+To get a bout's frames later, download the CSV and read just those frames from the original file (`path` is the local copy of the file named in the CSV's `file` column, set up as above):
+
+```bash
+gcloud storage cp gs://cv-project-storage/quiescent_bouts/20250511_1_MMStack_Default_0_quiescent_bouts.csv .
+```
 
 ```python
-fs.get("cv-project-storage/outputs/20250511_1_MMStack_Default_0_features.npz", "features.npz")
-d = np.load("features.npz")
+import csv
+import tifffile
+
+with open("20250511_1_MMStack_Default_0_quiescent_bouts.csv") as fh:
+    bouts = list(csv.DictReader(fh))
+
+b = bouts[3]                                                # bout number 3
+frames = tifffile.imread(path, key=range(int(b["start_frame"]), int(b["end_frame"])))
+```
+
+### Slot mask and features
+
+The notebook also uploads the slot mask and the per-frame features to the `outputs/` folder in the bucket as `<file>_slot_mask.npy` and `<file>_features.npz`, so each input file gets its own pair. `features.npz` holds the per-frame measurements, so you can rerun the movement cell without repeating the slow loop over every frame. To load it later:
+
+```python
+import numpy as np
+
+fs.get("cv-project-storage/outputs/20250511_1_MMStack_Default_0_features.npz", f"{temp_dir}/features.npz")
+d = np.load(f"{temp_dir}/features.npz")
 feats, iou = d["feats"], d["iou"]
 ```
 
-The video clip (`clip_500.mp4`) is a visual check and stays on the VM's local disk. To keep it, upload it to the `outputs/` folder in the bucket (never over the original files):
+### Video clip
+
+The video clip (`clip_500.mp4`) is a visual check. Its cell is commented out in the notebook by default, and the file stays in `temp/` on the VM. To keep it, upload it to the `outputs/` folder in the bucket (never over the original files):
 
 ```bash
-gcloud storage cp clip_500.mp4 gs://cv-project-storage/outputs/
+gcloud storage cp temp/clip_500.mp4 gs://cv-project-storage/outputs/
 ```
 
 ## 4. Running on a VM (for heavy processing)
@@ -165,7 +198,7 @@ Contributors also need permission to create and connect to VMs (for example `Com
 
 5. Open the `computer-vision-project` folder in VS Code, open the notebook, choose the `.venv` interpreter when asked (or press `F1` and run **Python: Select Interpreter**), and run all cells.
 
-   The notebook copies the data file onto the VM's disk (about 4 GB per file). The 50 GB disk fits a few files, so delete the temp folder when you finish with it:
+   The notebook copies the data file into the VM's `temp/` folder (about 4 GB per file). The 50 GB disk fits a few files, so delete the temp folder when you finish with it:
 
    ```bash
    rm -r temp/
@@ -189,9 +222,9 @@ Anything only on the VM's disk is lost if the VM is deleted. Save each kind of o
 | What | Where it goes |
 |---|---|
 | Code and notebook changes | GitHub |
-| Quiescent bouts from trackfly.ipynb (`.csv`) and the check plot (`.svg`) | The bucket's `quiescent_bouts/` folder (uploaded by the notebook) |
-| Slot mask and features from trackfly.ipynb (`.npy`, `.npz`) | The bucket's `outputs/` folder (uploaded by the notebook) |
-| Video clips from trackfly.ipynb (`.mp4`) | The bucket's `outputs/` folder (upload by hand) |
+| Quiescent bouts (`.csv`) and the check plot (`.svg`) from trackfly.ipynb | The bucket's `quiescent_bouts/` folder (uploaded by the notebook) |
+| Slot mask and features (`.npy`, `.npz`) from trackfly.ipynb | The bucket's `outputs/` folder (uploaded by the notebook) |
+| Video clips (`.mp4`) | The bucket's `outputs/` folder (upload by hand) |
 | Original TIFFs | Already in the bucket, never changed |
 
 ### Code changes (GitHub)
@@ -224,12 +257,12 @@ Your notebook still shows its outputs while you work. To keep a plot on purpose,
 ### Video clips (bucket)
 
 ```bash
-gcloud storage cp clip_500.mp4 gs://cv-project-storage/outputs/
+gcloud storage cp temp/clip_500.mp4 gs://cv-project-storage/outputs/
 ```
 
 ### Before deleting a VM
 
-Make sure `git status` shows nothing uncommitted and that any results you want are uploaded to `outputs/`. The VM's disk is destroyed when the VM is deleted. Stopping a VM keeps its disk.
+Make sure `git status` shows nothing uncommitted and that any results you want are in the bucket (`quiescent_bouts/` and `outputs/`). The notebook uploads the CSV, plot, slot mask and features itself, but video clips need to be uploaded by hand. The VM's disk is destroyed when the VM is deleted. Stopping a VM keeps its disk.
 
 ## Troubleshooting
 
